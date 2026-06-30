@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🌸 Soft Glow Virtual Mirror 🌸</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        * { box-sizing: border-box; }
+        :root {
+            --bg-gradient: linear-gradient(135deg, #fff2f6 0%, #ffeef8 100%);
+            --accent-color: #d81b60;
+            --sub-color: #ad1457;
+        }
+        body {
+            background: var(--bg-gradient);
+            font-family: 'Comfortaa', cursive;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 10px;
+            color: #4a5568;
+            overflow-x: hidden;
+            transition: background 0.5s ease;
+        }
+
+        /* 🌟 MOOD SCREEN OVERLAY */
+        #mood-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #fff0f6 0%, #ffdeeb 100%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            transition: all 0.5s ease;
+        }
+        .mood-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            padding: 30px;
+            border-radius: 28px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(216,27,96,0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+        .mood-card h2 { color: #d81b60; font-size: 18px; margin-bottom: 20px; line-height: 1.5; }
+        .mood-options { display: flex; justify-content: space-around; gap: 12px; margin-top: 10px; }
+        .mood-btn {
+            background: white;
+            border: 2px solid #ffe0e6;
+            border-radius: 20px;
+            padding: 12px;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            flex: 1;
+        }
+        .mood-btn span { font-size: 11px; font-family: 'Comfortaa', cursive; font-weight: bold; color: #4a5568; }
+        .mood-btn:hover { transform: scale(1.08); border-color: #d81b60; box-shadow: 0 5px 12px rgba(216,27,96,0.1); }
+
+        /* MAIN APP STYLING */
+        h1 {
+            color: var(--accent-color);
+            margin: 5px 0 2px 0;
+            font-size: 22px;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.05);
+            transition: color 0.5s ease;
+        }
+        .subtitle { font-size: 11px; color: var(--sub-color); margin: 0 0 10px 0; font-weight: bold; text-align: center; transition: color 0.5s ease; }
+        
+        .container {
+            position: relative;
+            border: 6px solid white;
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 15px 35px rgba(216, 27, 96, 0.12);
+            background: #fff;
+            width: 100%;
+            max-width: 400px;
+            aspect-ratio: 3/4;
+        }
+        #webcam { display: none; }
+        #output_canvas { transform: scaleX(-1); width: 100%; height: 100%; object-fit: cover; }
+        
+        .sparkle {
+            position: absolute; pointer-events: none; font-size: 14px;
+            animation: floatAway 0.8s ease-out forwards; z-index: 999;
+        }
+        @keyframes floatAway {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-30px) scale(0.5); opacity: 0; }
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            padding: 12px; border-radius: 22px; margin-top: 12px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.02);
+            display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 400px;
+        }
+        .menu-row { display: flex; align-items: center; justify-content: space-between; }
+        .menu-label { font-weight: bold; font-size: 11px; color: var(--sub-color); transition: color 0.5s ease; }
+        .color-options { display: flex; gap: 6px; }
+        .color-btn {
+            width: 28px; height: 28px; border-radius: 50%; border: 2px solid white;
+            cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.08); transition: all 0.2s ease;
+        }
+        .color-btn:hover { transform: scale(1.1); }
+        
+        .slider-container { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+        input[type=range] { -webkit-appearance: none; width: 55%; background: #f8bbd0; height: 4px; border-radius: 5px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%; background: var(--accent-color); }
+
+        .btn-group { display: flex; gap: 8px; margin-top: 2px; }
+        .action-btn {
+            flex: 1; border: none; padding: 10px; border-radius: 12px;
+            font-family: 'Comfortaa', cursive; font-weight: bold; font-size: 11px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .reset-btn { background-color: #ffe0e6; color: #c2185b; }
+        .snap-btn { background-color: var(--accent-color); color: white; box-shadow: 0 4px 10px rgba(216,27,96,0.15); transition: background 0.5s ease; }
+
+        .comfort-note {
+            margin-top: 10px; font-size: 11px; color: #c2185b; font-style: italic; text-align: center;
+            background: rgba(255, 255, 255, 0.5); padding: 6px; border-radius: 8px; width: 100%; max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="mood-screen">
+        <div class="mood-card">
+            <h2>How is your mood right now, beautiful? ✨</h2>
+            <div class="mood-options">
+                <button class="mood-btn" onclick="selectMood('happy')">🥰 <span>Happy</span></button>
+                <button class="mood-btn" onclick="selectMood('low')">🥺 <span>Low</span></button>
+                <button class="mood-btn" onclick="selectMood('tired')">😴 <span>Tired</span></button>
+            </div>
+        </div>
+    </div>
+
+    <h1>✨ Goddess Glow ✨</h1>
+    <div class="subtitle" id="welcome-text">Select your mood to unlock magic 🌸</div>
+
+    <div class="container" id="canvas-container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+    </div>
+
+    <div class="glass-panel">
+        <div class="menu-row">
+            <span class="menu-label">💄 Lipstick / Gloss:</span>
+            <div class="color-options">
+                <button class="color-btn" style="background-color: #ff4d6d;" onclick="setMakeup('#ff4d6d', 0.35, 'multiply', false)"></button>
+                <button class="color-btn" style="background-color: #ea638c;" onclick="setMakeup('#ea638c', 0.35, 'multiply', false)"></button>
+                <button class="color-btn" style="background-color: #ffe3ec; background-image: radial-gradient(circle, #ffffff 10%, #ffb6c1 80%);" onclick="setMakeup('#ffffff', 0.5, 'screen', false)"></button>
+            </div>
+        </div>
+        
+        <div class="menu-row">
+            <span class="menu-label">🌸 Soft Blush On:</span>
+            <div class="color-options">
+                <button class="color-btn" style="background-color: #ffb7b2;" onclick="setMakeup('#ffb7b2', 0.25, 'multiply', false)"></button>
+                <button class="color-btn" style="background-color: #ff9aa2;" onclick="setMakeup('#ff9aa2', 0.25, 'multiply', false)"></button>
+            </div>
+        </div>
+
+        <div class="menu-row">
+            <span class="menu-label">✨ Diamond Glitter:</span>
+            <div class="color-options">
+                <button class="color-btn" style="background: radial-gradient(circle, #fff 20%, #e0f2fe 80%);" onclick="setMakeup('#ffffff', 0.6, 'screen', true)"></button>
+                <button class="color-btn" style="background: radial-gradient(circle, #fef08a 20%, #fde047 80%);" onclick="setMakeup('#fde047', 0.5, 'screen', true)"></button>
+                <button class="color-btn" style="background: radial-gradient(circle, #fbcfe8 20%, #f472b6 80%);" onclick="setMakeup('#fbcfe8', 0.5, 'screen', true)"></button>
+            </div>
+        </div>
+
+        <div class="slider-container">
+            <span class="menu-label">🖌️ Brush Size:</span>
+            <input type="range" id="brushSize" min="6" max="25" value="12">
+        </div>
+
+        <div class="btn-group">
+            <button class="action-btn reset-btn" onclick="clearMirror()">Reset Mirror 💧</button>
+            <button class="action-btn snap-btn" onclick="takeSnapshot()">Save Look 📸</button>
+        </div>
+
+        <button class="action-btn" style="background: linear-gradient(135deg, #7e22ce, #d81b60); color: white; margin-top: 4px; width: 100%; border-radius: 12px; font-weight: bold; box-shadow: 0 4px 12px rgba(216,27,96,0.2);" onclick="applyAIAutoMatch()">
+            AI Auto-Match ✨
+        </button>
+    </div>
+
+    <div class="comfort-note" id="quote-box">✨ Select a mood below to set your vibe ✨</div>
+
+    <script>
+        // Mood Config Settings
+        const moodSettings = {
+            happy: {
+                gradient: "linear-gradient(135deg, #fff5f5 0%, #fed7e2 100%)",
+                accent: "#d81b60",
+                sub: "#ad1457",
+                quote: "Your smile lights up the room! Keep shining beautifully 🥰✨",
+                subText: "Joyful glow activated! Draw some sparkles on your cheeks 🌸"
+            },
+            low: {
+                gradient: "linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%)", 
+                accent: "#7e22ce",
+                sub: "#6b21a8",
+                quote: "It's completely okay to have low days. Take your time, you are safe and cherished here 🥺🤍",
+                subText: "Calming pastel aura loaded. Treat yourself gently today 🌸"
+            },
+            tired: {
+                gradient: "linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%)", 
+                accent: "#ea580c",
+                sub: "#c2410c",
+                quote: "Rough day? Sit back, take a deep breath, and let's have a fun pamper session 😴🥂",
+                subText: "Warm cozy vibe set. Time to relax and play with some shimmer ✨"
+            }
+        };
+
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const brushSlider = document.getElementById('brushSize');
+        
+        let brushColor = '#ff4d6d'; 
+        let brushOpacity = 0.35;
+        let blendMode = 'multiply'; 
+        let isGlitter = false;
+        let isPainting = false;
+        let paintedPoints = []; 
+        let currentLandmarks = null;
+
+        function selectMood(mood) {
+            const config = moodSettings[mood];
+            
+            document.documentElement.style.setProperty('--bg-gradient', config.gradient);
+            document.documentElement.style.setProperty('--accent-color', config.accent);
+            document.documentElement.style.setProperty('--sub-color', config.sub);
+            
+            document.getElementById('quote-box').innerText = config.quote;
+            document.getElementById('welcome-text').innerText = config.subText;
+
+            const moodOverlay = document.getElementById('mood-screen');
+            moodOverlay.style.opacity = '0';
+            setTimeout(() => moodOverlay.style.display = 'none', 500);
+
+            startCameraSystem();
+        }
+
+        function resizeCanvas() {
+            canvasElement.width = canvasElement.clientWidth;
+            canvasElement.height = canvasElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function setMakeup(color, opacity, mode, glitterMode) {
+            brushColor = color;
+            brushOpacity = opacity;
+            blendMode = mode;
+            isGlitter = glitterMode;
+        }
+
+        function hexToRgbA(hex, opacity){
+            let c;
+            if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+                c= hex.substring(1).split('');
+                if(c.length== 3){ c= [c[0], c[0], c[1], c[1], c[2], c[2]]; }
+                c= '0x'+c.join('');
+                return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+opacity+')';
+            }
+            return hex;
+        }
+
+        function createSparkle(clientX, clientY) {
+            const sparkle = document.createElement('div');
+            sparkle.classList.add('sparkle');
+            sparkle.innerText = ['✨', '🌸', '💕'][Math.floor(Math.random() * 3)];
+            sparkle.style.left = `${clientX - 10}px`;
+            sparkle.style.top = `${clientY - 10}px`;
+            document.body.appendChild(sparkle);
+            setTimeout(() => sparkle.remove(), 800);
+        }
+
+        function clearMirror() {
+            paintedPoints = [];
+        }
+
+        canvasElement.addEventListener('mousedown', (e) => { isPainting = true; createSparkle(e.clientX, e.clientY); });
+        canvasElement.addEventListener('mouseup', () => isPainting = false);
+        canvasElement.addEventListener('mouseleave', () => isPainting = false);
+        canvasElement.addEventListener('mousemove', handlePaint);
+
+        canvasElement.addEventListener('touchstart', (e) => { 
+            isPainting = true; 
+            createSparkle(e.touches[0].clientX, e.touches[0].clientY);
+            handlePaint(e.touches[0]); 
+        });
+        canvasElement.addEventListener('touchend', () => isPainting = false);
+        canvasElement.addEventListener('touchmove', (e) => { e.preventDefault(); handlePaint(e.touches[0]); }, { passive: false });
+
+        function handlePaint(e) {
+            if (!isPainting || !currentLandmarks) return;
+
+            const rect = canvasElement.getBoundingClientRect();
+            const x = canvasElement.width - ((e.clientX - rect.left) * (canvasElement.width / rect.width));
+            const y = (e.clientY - rect.top) * (canvasElement.height / rect.height);
+            const radius = parseInt(brushSlider.value);
+
+            if (Math.random() < 0.05) createSparkle(e.clientX, e.clientY);
+
+            for (let i = 0; i < currentLandmarks.length; i++) {
+                const pt = currentLandmarks[i];
+                const ptX = pt.x * canvasElement.width;
+                const ptY = pt.y * canvasElement.height;
+
+                const distance = Math.sqrt((x - ptX)**2 + (y - ptY)**2);
+                if (distance < radius) { 
+                    if (!paintedPoints.some(p => p.index === i)) {
+                        paintedPoints.push({ 
+                            index: i, color: brushColor, opacity: brushOpacity, 
+                            size: radius, mode: blendMode, glitter: isGlitter
+                        });
+                    }
+                }
+            }
+        }
+
+        function drawGlitterParticle(ctx, x, y, size, color) {
+            ctx.save(); ctx.fillStyle = "#ffffff"; ctx.shadowBlur = 4; ctx.shadowColor = color;
+            ctx.beginPath(); ctx.moveTo(x, y - size); ctx.lineTo(x + size, y); ctx.lineTo(x, y + size); ctx.lineTo(x - size, y);
+            ctx.closePath(); ctx.fill(); ctx.restore();
+        }
+
+        function onResults(results) {
+            if (canvasElement.width === 0) resizeCanvas();
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                currentLandmarks = results.multiFaceLandmarks[0];
+                paintedPoints.forEach(point => {
+                    const facePoint = currentLandmarks[point.index];
+                    if (facePoint) {
+                        const px = facePoint.x * canvasElement.width;
+                        const py = facePoint.y * canvasElement.height;
+                        canvasCtx.save();
+                        canvasCtx.globalCompositeOperation = point.mode || 'multiply';
+                        
+                        if (point.glitter) {
+                            if (Math.random() < 0.15) { 
+                                drawGlitterParticle(canvasCtx, px + (Math.random() * 6 - 3), py + (Math.random() * 6 - 3), Math.random() * 2 + 1, point.color);
+                            }
+                        } else {
+                            canvasCtx.fillStyle = hexToRgbA(point.color, point.opacity);
+                            canvasCtx.beginPath(); canvasCtx.shadowBlur = point.size * 1.4; canvasCtx.shadowColor = point.color;
+                            canvasCtx.arc(px, py, point.size, 0, 2 * Math.PI); canvasCtx.fill();
+                        }
+                        canvasCtx.restore();
+                    }
+                });
+            } else { currentLandmarks = null; }
+            canvasCtx.restore();
+        }
+
+        const faceMesh = new FaceMesh({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+        });
+
+        // 🚀 LOW-END DEVICE LAG OPTIMIZATION FIXED
+        faceMesh.setOptions({ 
+            maxNumFaces: 1, 
+            refineLandmarks: false, 
+            minDetectionConfidence: 0.4, 
+            minTrackingConfidence: 0.4 
+        });
+        faceMesh.onResults(onResults);
+
+        function startCameraSystem() {
+            const camera = new Camera(videoElement, {
+                onFrame: async () => { await faceMesh.send({ image: videoElement }); },
+                width: 360, height: 480, frameRate: { ideal: 24, max: 30 }
+            });
+            camera.start();
+        }
+
+        // 🌟 AUTOMATIC SMART LOOK RE-ROUTE (NO HOTCH-POTCH)
+        function applyAIAutoMatch() {
+            if (!currentLandmarks) {
+                alert("Please let the camera detect your face first! 🌸");
+                return;
+            }
+            clearMirror();
+
+            // Outer Lip Contours
+            for (let i = 61; i <= 95; i++) {
+                paintedPoints.push({
+                    index: i, color: '#ea638c', opacity: 0.3, size: 10, mode: 'multiply', glitter: false
+                });
+            }
+
+            // Balanced Cheek Structures
+            const leftCheek = [234, 93, 137, 123];
+            const rightCheek = [454, 323, 366, 352];
+            leftCheek.concat(rightCheek).forEach(idx => {
+                paintedPoints.push({
+                    index: idx, color: '#ffb7b2', opacity: 0.15, size: 22, mode: 'multiply', glitter: false
+                });
+            });
+            
+            document.getElementById('welcome-text').innerText = "✨ AI Auto-Match Look Applied Perfectly! ✨";
+        }
+
+        function takeSnapshot() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvasElement.width; tempCanvas.height = canvasElement.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.translate(canvasElement.width, 0); tempCtx.scale(-1, 1);
+            tempCtx.drawImage(canvasElement, 0, 0);
+            const link = document.createElement('a');
+            link.download = 'goddess-glow-look.png';
+            link.href = tempCanvas.toDataURL(); link.click();
+        }
+    </script>
+</body>
+</html>
